@@ -4,13 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Size Line-Up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; background: #fbfbf8; color: #24201d; }
-  body { font: 15px/1.35 Georgia, serif; }
+  body { font: 19px/1.35 'Patrick Hand', 'Comic Sans MS', cursive; }
   header { padding: 12px 16px 0; }
-  h1 { font-size: 22px; margin: 0; display: inline; }
+  h1 { font-size: 28px; margin: 0; display: inline; }
   a { color: inherit; margin-left: 12px; }
   label { margin-left: 16px; }
+  button, select, input, label { font-family: inherit; }
 </style>
 </head>
 <body>
@@ -85,7 +89,7 @@ new p5((p) => {
 
   p.setup = () => {
     p.createCanvas(p.windowWidth, 600);
-    p.textFont('Georgia');
+    p.textFont('Patrick Hand');
     world = Emberley.createWorld(p, { seed: 4, wrap: false });
     const k = document.getElementById('k'), kv = document.getElementById('kv');
     k.oninput = () => { kv.textContent = k.value; world.sizeExponent = +k.value; layout(); };
@@ -93,7 +97,7 @@ new p5((p) => {
   };
   p.draw = () => {
     world.frame();
-    p.noStroke(); p.fill(36, 32, 29); p.textAlign(p.CENTER); p.textSize(13);
+    p.noStroke(); p.fill(36, 32, 29); p.textAlign(p.CENTER); p.textSize(17);
     for (const [n, x, y] of labels) p.text(n, x, y);
   };
   p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.height); layout(); };

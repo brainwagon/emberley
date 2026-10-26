@@ -26,11 +26,26 @@ with him or his publishers.
 | `gallery.html` | The book's step-by-step strips, item by item       |
 | `sheet.html`   | Every item at once, animating in place             |
 | `sizes.html`   | Every item at its natural size, smallest to largest |
+| `about.md`     | Your own story, shown by the main page's About button |
+| `about.js`     | Loads `about.md` into that panel (tiny Markdown converter) |
 
 Browsers won't load the scripts from `file://` in every case, so
 serve the folder:
 
     python3 -m http.server 8000    # then open localhost:8000
+
+## About page
+
+Write anything you like in `about.md` (plain Markdown: headings,
+paragraphs, *italic*, **bold**, links, pictures, lists, quotes).  The
+main page loads it automatically: an **About** button appears in the
+toolbar and opens it in a side panel, and `index.html#about` links
+straight to it.  While the file has nothing but comments the button
+stays hidden.  Pictures can sit next to it, e.g. `![me](images/me.jpg)`.
+
+Browsers won't let a page read `about.md` when it's opened as a
+`file://` URL, so the button only shows on the live site or from a
+local server (`python3 -m http.server`).
 
 ## Quick start
 
@@ -67,7 +82,7 @@ filters by tag.
   balloon
 - **vehicles:** car, truck, bus, engine, coach, caboose, train
   (`cars: 2`, `caboose: true`)
-- **boats:** sailboat, ship
+- **boats:** sailboat, ship, submarine (under water)
 - **animals:** bird, butterfly, fish, cat, blackcat, elephant, trex, dog, horse, cow, pig,
   duck, snail, turtle, ladybug
 - **scenery:** ground, road, track, water (take `width`, `depth`)

@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Everything Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
 <style>
   html, body { margin: 0; background: #fbfbf8; color: #24201d; }
-  body { font: 15px/1.35 Georgia, serif; }
+  body { font: 19px/1.35 'Patrick Hand', 'Comic Sans MS', cursive; }
   header { padding: 12px 16px 0; }
-  h1 { font-size: 22px; margin: 0; display: inline; }
+  h1 { font-size: 28px; margin: 0; display: inline; }
   a { color: inherit; margin-left: 12px; }
+  button, select, input, label { font-family: inherit; }
 </style>
 </head>
 <body>
@@ -32,7 +36,7 @@ new p5((p) => {
     const cols = Math.max(2, Math.floor((p.windowWidth - 20) / cellW));
     const rows = Math.ceil(names.length / cols);
     p.createCanvas(cols * cellW + 20, rows * cellH + 20);
-    p.textFont('Georgia');
+    p.textFont('Patrick Hand');
     world = Emberley.createWorld(p, { seed: 5, wrap: false });
     names.forEach((n, i) => {
       const def = Emberley.registry[n];
@@ -49,7 +53,7 @@ new p5((p) => {
     p.noStroke();
     p.fill(36, 32, 29);
     p.textAlign(p.CENTER);
-    p.textSize(14);
+    p.textSize(18);
     const cols = Math.floor((p.width - 20) / cellW);
     names.forEach((n, i) => {
       p.text(n, 10 + (i % cols) * cellW + cellW / 2, 10 + Math.floor(i / cols) * cellH + cellH - 8);

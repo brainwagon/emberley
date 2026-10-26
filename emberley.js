@@ -1781,6 +1781,39 @@
     }
   });
 
+  define('submarine', {
+    real: 9,
+    tags: ['boats', 'water'], size: [110, 56], origin: 'center', motion: 'swim', speed: 14, layer: 6,
+    defaults: { color: 'yellow' },
+    build(d, o) {
+      d.step(); d.ellipse(0, 0, 44, 13, { fill: o.color });
+      d.step();
+      // periscope: rises and sinks, and swivels to look around; drawn
+      // before the tower so the tower hides its lower end
+      d.part('periscope', {
+        pivot: [2, -30],
+        dy: (t) => 4 - 4 * Math.cos(t * 0.7),
+        sx: (t) => (Math.sin(t * 0.45) > 0 ? 1 : -1)
+      });
+      d.path([2, -22, 2, -38, 9, -38], { w: 1.8, part: 'periscope' });
+      d.poly([-13, -11, -10, -25, 10, -25, 14, -11], { fill: o.color });
+      d.step();
+      [-22, -6, 10, 26].forEach((x) => d.circle(x, 1, 3.4, { fill: 'blue' }));
+      d.step();
+      d.tri(-34, -8, -46, -16, -43, -3, { fill: o.color });
+      d.tri(-34, 8, -46, 16, -43, 3, { fill: o.color });
+      d.line(-44, 0, -50, 0, { w: 1.4 });
+      d.step();
+      d.part('prop', A.flap(4, -50, 0, 'y'));
+      d.line(-50, -9, -50, 9, { w: 2, part: 'prop' });
+      d.dot(-50, 0, { r: 2 });
+      for (let i = 0; i < 3; i++) {
+        d.part('bubble' + i, A.puff(2.2, 16, -14, i / 3, -54, 0));
+        d.circle(-54, -2, 2.4, { part: 'bubble' + i, w: 0.7, ink: 'blue' });
+      }
+    }
+  });
+
   define('cat', {
     real: 0.45,
     tags: ['animals'], size: [44, 70], layer: 2,
