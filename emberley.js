@@ -505,14 +505,27 @@
       ctx.fill();
       return null;
     }
+    // Knockout: a flat-colour fill covers what is under it.  It only
+    // covers what the pen has reached so far, so a shape being drawn
+    // never shows as a paper-white silhouette erasing earlier steps.
     if (pr.knock && pr.fill && v.shape && outP > 0) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = pal.paper;
-      tracePath(ctx, D(v.shape), true);
-      ctx.fill();
-      ctx.restore();
+      const done = fillP >= 1 || !v.scr;
+      if (done || fillP > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = alpha;
+        tracePath(ctx, D(v.shape), true);
+        if (done) {
+          ctx.fillStyle = pal.paper;
+          ctx.fill();
+        } else {
+          ctx.clip();
+          ctx.strokeStyle = pal.paper;
+          ctx.lineWidth = fw;
+          strokePart(ctx, D(v.scr), v.scrCum, fillP);
+        }
+        ctx.restore();
+      }
     }
     const fc = colour(pal, pr.fill);
     if (fc && v.scr && fillP > 0) {
