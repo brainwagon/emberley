@@ -8,10 +8,10 @@ wheels roll, legs walk, flags wave, smoke puffs and propellers spin.
 
 One file, no dependencies beyond p5.js (1.x).
 
-**Live demo:** <https://brainwagon.github.io/emberley/> (also the
-[gallery](https://brainwagon.github.io/emberley/gallery.html),
-[everything sheet](https://brainwagon.github.io/emberley/sheet.html)
-and [size line-up](https://brainwagon.github.io/emberley/sizes.html)).
+**Live demo:** <https://mvandewettering.com/emberley/> (also the
+[gallery](https://mvandewettering.com/emberley/gallery.html),
+[everything sheet](https://mvandewettering.com/emberley/sheet.html)
+and [size line-up](https://mvandewettering.com/emberley/sizes.html)).
 
 An unofficial homage: the drawings are original, made in the style
 of Ed Emberley's drawing books, and this project isn't affiliated
