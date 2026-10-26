@@ -21,7 +21,10 @@
       .replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (m, alt, src) =>
         '<img src="' + safeUrl(src) + '" alt="' + alt + '">')
       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, href) =>
-        '<a href="' + safeUrl(href) + '">' + t + '</a>')
+        '<a href="' + safeUrl(href) + '"' +
+        // links to other sites open in a new tab, so the world keeps running
+        (/^https?:/i.test(href) ? ' target="_blank" rel="noopener"' : '') +
+        '>' + t + '</a>')
       .replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, '<a href="$1">$1</a>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
       .replace(/(^|[^*\w])\*([^*\s][^*]*)\*/g, '$1<em>$2</em>')
