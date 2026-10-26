@@ -1794,6 +1794,34 @@
     }
   });
 
+  define('shark', {
+    real: 4.5,
+    tags: ['animals', 'water'], size: [110, 60], origin: 'center', motion: 'swim', speed: 22, layer: 6,
+    defaults: { color: 'grey' },
+    build(d, o) {
+      // body: a triangle snout, a trapezoid middle, a tapering trapezoid
+      d.step();
+      d.tri(30, -13, 51, 1, 30, 10, { fill: o.color });
+      d.poly([-20, -10, 30, -13, 30, 10, -20, 6], { fill: o.color });
+      d.poly([-42, -3, -20, -10, -20, 6, -42, 3], { fill: o.color });
+      d.step();
+      // the great white's white belly
+      d.poly([46, 2, 30, 8.5, -20, 4.8, -38, 2, -20, 1, 30, 1], { fill: 'paper' });
+      d.step();
+      d.poly([-6, -13, 2, -34, 7, -33, 14, -12], { fill: o.color });
+      d.part('tail', A.swing(0.22, 1.3, -40, 0));
+      d.poly([-38, -3, -56, -27, -50, -1, -54, 15, -38, 3], { fill: o.color, part: 'tail' });
+      d.step();
+      d.tri(16, 5, 2, 22, 24, 7, { fill: o.color });
+      d.step();
+      d.dot(34, -5, { r: 1.8 });
+      [18, 22, 26].forEach((x) => d.curve([x, -7, x - 1.5, -2, x, 3], { w: 0.8 }));
+      // a toothy grin
+      d.poly([48, 3, 40, 6.5, 29, 6, 31, 4, 40, 4.5], { fill: 'black' });
+      for (let x = 32; x < 46; x += 3) d.tri(x, 4.6, x + 1.5, 6.4, x + 3, 4.4, { fill: 'paper' });
+    }
+  });
+
   define('submarine', {
     real: 9,
     tags: ['boats', 'water'], size: [110, 56], origin: 'center', motion: 'swim', speed: 14, layer: 6,

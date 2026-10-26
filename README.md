@@ -83,8 +83,8 @@ filters by tag.
 - **vehicles:** car, truck, bus, engine, coach, caboose, train
   (`cars: 2`, `caboose: true`)
 - **boats:** sailboat, ship, submarine (under water)
-- **animals:** bird, butterfly, fish, cat, blackcat, elephant, trex, dog, horse, cow, pig,
-  duck, snail, turtle, ladybug
+- **animals:** bird, butterfly, fish, shark, cat, blackcat, elephant,
+  trex, dog, horse, cow, pig, duck, snail, turtle, ladybug
 - **scenery:** ground, road, track, water (take `width`, `depth`)
 
 Ground items stand with their feet on `y`; sky items (birds,

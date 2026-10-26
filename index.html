@@ -177,7 +177,7 @@ new p5((p) => {
   const landThings = ['person', 'girl', 'king', 'knight', 'soldier', 'cowboy', 'clown',
     'dog', 'cat', 'blackcat', 'elephant', 'trex', 'horse', 'pig', 'cow', 'flower', 'mushroom', 'tree', 'pine', 'snail',
     'turtle', 'ladybug', 'flag', 'car'];
-  const seaThings = ['fish', 'duck', 'sailboat', 'submarine'];
+  const seaThings = ['fish', 'shark', 'duck', 'sailboat', 'submarine'];
   const colours = ['red', 'orange', 'yellow', 'green', 'blue', 'brown'];
 
   p.mousePressed = (e) => {
@@ -187,7 +187,7 @@ new p5((p) => {
     const name = pool[Math.floor(Math.random() * pool.length)];
     // things clicked further down the page are nearer, so bigger
     let depth = NEAR;
-    if (name === 'submarine' || name === 'sailboat') depth = 0.3;
+    if (name === 'submarine' || name === 'sailboat' || name === 'shark') depth = 0.3;
     else if (pool === skyThings) depth = name === 'bird' || name === 'butterfly' ? 0.7 : SKY;
     else if (pool === landThings) depth = FAR + (NEAR - FAR) * Math.min(1, Math.max(0, (y - r.horizon) / (r.walk - r.horizon)));
     world.add(name, {
