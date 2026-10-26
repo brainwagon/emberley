@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Size Line-Up</title>
+<style>
+  html, body { margin: 0; background: #fbfbf8; color: #24201d; }
+  body { font: 15px/1.35 Georgia, serif; }
+  header { padding: 12px 16px 0; }
+  h1 { font-size: 22px; margin: 0; display: inline; }
+  a { color: inherit; margin-left: 12px; }
+  label { margin-left: 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Size line-up</h1>
+  <a href="index.html">the whole world</a><a href="gallery.html">step by step</a>
+  <label>size compression
+    <input id="k" type="range" min="0" max="1" step="0.05" value="0.45">
+    <span id="kv">0.45</span></label>
+</header>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="emberley.js"></script>
+<script>
+// Every item at its natural size, smallest to largest, standing on
+// shared ground lines.  The slider sets sizeExponent: 1 is true scale,
+// 0 makes everything the same height.
+new p5((p) => {
+  let world, labels = [];
+  const names = Emberley.list().filter((n) => Emberley.registry[n].real);
+
+  function bbox(it) {
+    let x0 = Infinity, x1 = -Infinity;
+    for (const pr of it.prims) {
+      for (let i = 0; i < pr.outline.length; i += 2) {
+        x0 = Math.min(x0, pr.outline[i]); x1 = Math.max(x1, pr.outline[i]);
+      }
+    }
+    return [x0 * it.scale, x1 * it.scale];
+  }
+
+  function layout() {
+    world.clear();
+    labels = [];
+    const k = world.sizeExponent;
+    // pick a zoom so the biggest item is about 260 px tall
+    const tallest = Math.max(...names.map((n) => {
+      const def = Emberley.registry[n];
+      return Math.max(14, 100 * Math.pow(def.real / 1.75, k));
+    }));
+    const zoom = 260 / tallest;
+    const items = names.map((n) => world.add(n, { scale: zoom, instant: true, motion: inPlace }))
+      .sort((a, b) => a.def.real - b.def.real);
+    let x = 20, row = [], rows = [];
+    const W = p.width - 20;
+    for (const it of items) {
+      const [x0, x1] = bbox(it);
+      const w = Math.max(x1 - x0, 64);  // leave room for the label
+      if (x + w > W && row.length) { rows.push(row); row = []; x = 20; }
+      row.push({ it, x: x - x0, w });
+      x += w + 26;
+    }
+    if (row.length) rows.push(row);
+    let y = 20;
+    for (const r of rows) {
+      const h = Math.max(...r.map((c) => {
+        const def = c.it.def;
+        return Math.max(14, 100 * Math.pow(def.real / 1.75, k)) * zoom;
+      }));
+      y += h + 10;
+      for (const c of r) {
+        c.it.x = c.x;
+        c.it.y = c.it.def.origin === 'center' ? y - c.it.size[1] * c.it.scale / 2 : y;
+        labels.push([c.it.name, c.x + (bbox(c.it)[0] + bbox(c.it)[1]) / 2, y + 18]);
+      }
+      world.add('ground', { x: p.width / 2, y, width: p.width - 20, instant: true });
+      y += 34;
+    }
+    if (p.height !== Math.ceil(y)) p.resizeCanvas(p.width, Math.ceil(y));
+  }
+
+  function inPlace(it, dt) { it.dist += 12 * dt / it.scale; }
+
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, 600);
+    p.textFont('Georgia');
+    world = Emberley.createWorld(p, { seed: 4, wrap: false });
+    const k = document.getElementById('k'), kv = document.getElementById('kv');
+    k.oninput = () => { kv.textContent = k.value; world.sizeExponent = +k.value; layout(); };
+    layout();
+  };
+  p.draw = () => {
+    world.frame();
+    p.noStroke(); p.fill(36, 32, 29); p.textAlign(p.CENTER); p.textSize(13);
+    for (const [n, x, y] of labels) p.text(n, x, y);
+  };
+  p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.height); layout(); };
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Step-by-Step Gallery</title>
+<style>
+  html, body { margin: 0; background: #fbfbf8; color: #24201d; }
+  body { font: 15px/1.35 Georgia, serif; display: flex; min-height: 100vh; }
+  nav { width: 170px; flex: none; padding: 12px; border-right: 1.5px solid #24201d;
+    overflow-y: auto; height: 100vh; box-sizing: border-box; }
+  nav h1 { font-size: 18px; margin: 0 0 4px; }
+  nav h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    margin: 14px 0 4px; opacity: .65; }
+  nav button { display: block; width: 100%; text-align: left; font: inherit;
+    background: none; border: 0; padding: 2px 6px; cursor: pointer; border-radius: 3px; }
+  nav button.on { background: #24201d; color: #fbfbf8; }
+  main { flex: 1; position: relative; min-width: 0; }
+  #title { position: absolute; left: 20px; top: 14px; font-size: 26px; margin: 0; }
+  #help { position: absolute; right: 20px; top: 20px; opacity: .65; }
+  a { color: inherit; }
+  @media (max-width: 640px) {
+    body { flex-direction: column; }
+    nav { width: auto; height: auto; max-height: 30vh; border-right: 0;
+      border-bottom: 1.5px solid #24201d; }
+    #help { display: none; }
+  }
+</style>
+</head>
+<body>
+<nav id="nav"><h1>Make a World</h1><a href="index.html">&larr; the whole world</a></nav>
+<main id="main"><h2 id="title"></h2><div id="help">&larr; / &rarr; to browse, click to redraw</div></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="emberley.js"></script>
+<script>
+const groups = {};
+Emberley.list().forEach((n) => {
+  const tag = (Emberley.registry[n].tags || ['other'])[0];
+  (groups[tag] = groups[tag] || []).push(n);
+});
+const order = [].concat(...Object.values(groups));
+let current = location.hash.slice(1) || 'car';
+if (!order.includes(current)) current = 'car';
+
+const nav = document.getElementById('nav');
+const buttons = {};
+Object.entries(groups).forEach(([tag, names]) => {
+  const h = document.createElement('h2');
+  h.textContent = tag;
+  nav.appendChild(h);
+  names.forEach((n) => {
+    const b = document.createElement('button');
+    b.textContent = n;
+    b.onclick = () => show(n);
+    nav.appendChild(b);
+    buttons[n] = b;
+  });
+});
+
+let world, P;
+function show(name) {
+  current = name;
+  history.replaceState(null, '', '#' + name);
+  Object.values(buttons).forEach((b) => b.classList.remove('on'));
+  buttons[name].classList.add('on');
+  buttons[name].scrollIntoView({ block: 'nearest' });
+  document.getElementById('title').textContent = name;
+  if (!world) return;
+  world.clear();
+  const def = Emberley.registry[name];
+  const W = P.width, H = P.height;
+  const wide = name === 'ground' || name === 'road' || name === 'track' || name === 'water';
+  const centre = def.origin === 'center';
+  const dims = wide ? [300, def.size[1]] : def.size;
+  // one item at a time: fit it to the frame rather than use natural size
+  const opts = wide ? { width: 300, natural: false } : { natural: false };
+
+  // the book's strip of steps along the top
+  const probe = new Emberley.Item(world, name, Object.assign({ instant: true }, opts));
+  const cell = dims[0] + 24;
+  const n = probe.nSteps;
+  const scale = Math.min(1.5, (W - 60) / (n * cell), (H * 0.4) / (dims[1] + 30));
+  const base = 80 + dims[1] * scale + (centre ? -dims[1] * scale / 2 : 0);
+  const x0 = (W - (n - 1) * cell * scale) / 2;
+  const panels = world.strip(name, x0, base, Object.assign({ scale, cell, delay: 0.3 }, opts));
+
+  // and the finished drawing coming to life underneath
+  const stage = H * 0.88;
+  const s2 = Math.min(2.2, (H * 0.36) / dims[1], (W * 0.6) / dims[0]);
+  const ground = world.add('ground', { x: W / 2, y: stage, width: W - 40, delay: 0.2 });
+  const alive = world.add(name, Object.assign({
+    x: W / 2, y: centre ? stage - dims[1] * s2 * 0.9 : stage, scale: s2,
+    delay: panels.reduce((t, it) => t + it.drawTime + 0.35, 0.6)
+  }, opts));
+}
+
+new p5((p) => {
+  P = p;
+  p.setup = () => {
+    const main = document.getElementById('main');
+    const c = p.createCanvas(main.clientWidth, Math.max(420, window.innerHeight - (window.innerWidth <= 640 ? nav.offsetHeight : 0)));
+    c.parent(main);
+    world = Emberley.createWorld(p, { seed: 11 });
+    show(current);
+  };
+  p.draw = () => world.frame();
+  p.mousePressed = (e) => { if (e && e.target && e.target.tagName === 'CANVAS') show(current); };
+  p.keyPressed = () => {
+    const i = order.indexOf(current);
+    if (p.keyCode === p.RIGHT_ARROW) show(order[(i + 1) % order.length]);
+    if (p.keyCode === p.LEFT_ARROW) show(order[(i - 1 + order.length) % order.length]);
+  };
+  p.windowResized = () => {
+    const main = document.getElementById('main');
+    p.resizeCanvas(main.clientWidth, Math.max(420, window.innerHeight));
+    show(current);
+  };
+});
+</script>
+</body>
+</html>

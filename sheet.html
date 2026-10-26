@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Everything Sheet</title>
+<style>
+  html, body { margin: 0; background: #fbfbf8; color: #24201d; }
+  body { font: 15px/1.35 Georgia, serif; }
+  header { padding: 12px 16px 0; }
+  h1 { font-size: 22px; margin: 0; display: inline; }
+  a { color: inherit; margin-left: 12px; }
+</style>
+</head>
+<body>
+<header><h1>Everything</h1><a href="index.html">the whole world</a><a href="gallery.html">step by step</a></header>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="emberley.js"></script>
+<script>
+// Every item, animating in place: things that travel walk or drive on
+// the spot, so you can see their parts move.
+new p5((p) => {
+  let world;
+  const names = Emberley.list().filter((n) => !['ground', 'road', 'track', 'water', 'train'].includes(n));
+  const cellW = 150, cellH = 150;
+
+  function inPlace(it, dt) {
+    it.dist += it.speed * dt / it.scale;
+  }
+
+  p.setup = () => {
+    const cols = Math.max(2, Math.floor((p.windowWidth - 20) / cellW));
+    const rows = Math.ceil(names.length / cols);
+    p.createCanvas(cols * cellW + 20, rows * cellH + 20);
+    p.textFont('Georgia');
+    world = Emberley.createWorld(p, { seed: 5, wrap: false });
+    names.forEach((n, i) => {
+      const def = Emberley.registry[n];
+      const cx = 10 + (i % cols) * cellW + cellW / 2;
+      const base = 10 + Math.floor(i / cols) * cellH + cellH - 28;
+      const s = Math.min(1, 110 / def.size[0], 100 / def.size[1]);
+      const y = def.origin === 'center' ? base - def.size[1] * s / 2 - 4 : base;
+      world.add(n, { x: cx, y, scale: s, delay: i * 0.15, motion: inPlace, natural: false });
+    });
+  };
+
+  p.draw = () => {
+    world.frame();
+    p.noStroke();
+    p.fill(36, 32, 29);
+    p.textAlign(p.CENTER);
+    p.textSize(14);
+    const cols = Math.floor((p.width - 20) / cellW);
+    names.forEach((n, i) => {
+      p.text(n, 10 + (i % cols) * cellW + cellW / 2, 10 + Math.floor(i / cols) * cellH + cellH - 8);
+    });
+  };
+});
+</script>
+</body>
+</html>

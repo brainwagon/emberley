@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Make a World</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fbfbf8; }
+  body { font: 14px/1.3 Georgia, serif; color: #24201d; }
+  #bar {
+    position: fixed; left: 12px; top: 12px; z-index: 2;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    background: rgba(255,255,255,.75); padding: 8px 10px; border-radius: 6px;
+    border: 1.5px solid #24201d;
+  }
+  #bar h1 { font-size: 17px; margin: 0 6px 0 0; }
+  button, select { font: inherit; padding: 3px 8px; border: 1.5px solid #24201d;
+    border-radius: 4px; background: #fff; cursor: pointer; }
+  a { color: inherit; }
+  #hint { opacity: .7; }
+  #swatches span { display: inline-block; width: 16px; height: 16px;
+    border-radius: 50%; margin-right: 3px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>Make a World</h1>
+  <button id="redraw">Redraw</button>
+  <select id="palette"></select>
+  <span id="swatches"></span>
+  <label><input type="checkbox" id="boil" checked> boil</label>
+  <label><input type="checkbox" id="pen" checked> pen</label>
+  <a href="gallery.html">step-by-step gallery &rarr;</a>
+  <span id="hint">click anywhere to draw something new</span>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="emberley.js"></script>
+<script>
+new p5((p) => {
+  let world;
+
+  // Items now come in their natural sizes (a person is 100 units, a
+  // castle about 290), so the scene only sets a zoom `u` and a depth
+  // factor per row: far things smaller, near things bigger.
+  const FAR = 0.5, NEAR = 0.85, SEA_FAR = 0.32, SKY = 0.35;
+  let u = 1;
+  const rows = (H) => ({
+    horizon: H * 0.4, walk: H * 0.52, road: H * 0.57,
+    rail: H * 0.8, sea: H * 0.87
+  });
+
+  function build() {
+    const W = p.width, H = p.height, r = rows(H);
+    u = Math.min(H / 1100, W / 1500) * 0.85 + 0.15;
+    const roadDepth = 58 * u;
+    world.clear();
+    let t = 0;
+    const add = (name, o, gap) => {
+      const it = world.add(name, Object.assign({ delay: t }, o));
+      t += gap == null ? 0.7 : gap;
+      return it;
+    };
+    const far = (o) => Object.assign({ scale: u * FAR, y: r.horizon }, o);
+    const near = (o) => Object.assign({ scale: u * NEAR, y: r.walk }, o);
+    const sky = (o) => Object.assign({ scale: u * SKY }, o);
+    add('ground', { x: W / 2, y: r.horizon, width: W + 40 }, 0.2);
+    add('water', { x: W / 2, y: r.sea, width: W + 40, depth: H - r.sea + 10 }, 0.4);
+    add('sun', { x: W * 0.86, y: H * 0.13, scale: u * 1.1 });
+    add('mountain', { x: W * 0.12, y: r.horizon, scale: u * 2.2 }, 0.4);
+    add('mountain', { x: W * 0.3, y: r.horizon, scale: u * 1.6 });
+    add('hill', { x: W * 0.72, y: r.horizon, scale: u * 1.3 });
+    add('castle', far({ x: W * 0.5 }), 1.2);
+    add('house', far({ x: W * 0.2 }));
+    add('house', far({ x: W * 0.3, color: 'orange', roof: 'blue' }));
+    add('tree', far({ x: W * 0.38 }));
+    add('pine', far({ x: W * 0.06 }), 0.3);
+    add('pine', far({ x: W * 0.62 }), 0.3);
+    add('windmill', far({ x: W * 0.72 }));
+    add('tree', far({ x: W * 0.83, fruit: 'orange' }));
+    add('tent', far({ x: W * 0.91 }));
+    add('rocket', far({ x: W * 0.97 }));
+    add('cloud', { x: W * 0.2, y: H * 0.1, scale: u * 1.4 }, 0.3);
+    add('cloud', { x: W * 0.55, y: H * 0.07, scale: u * 1.1, speed: 9 }, 0.3);
+    add('road', { x: W / 2, y: r.road, width: W + 40, depth: roadDepth }, 0.3);
+    add('track', { x: W / 2, y: r.rail, width: W + 40 }, 0.3);
+    add('person', near({ x: W * 0.1 }));
+    add('girl', near({ x: W * 0.15 }));
+    add('king', near({ x: W * 0.43, facing: -1 }));
+    add('knight', near({ x: W * 0.56 }));
+    add('dog', near({ x: W * 0.22 }));
+    add('blackcat', near({ x: W * 0.5, facing: -1 }));
+    add('elephant', near({ x: W * 0.8, facing: -1 }));
+    add('trex', near({ x: W * 0.33 }));
+    add('horse', near({ x: W * 0.66, facing: -1 }));
+    add('cow', near({ x: W * 0.94, facing: -1 }), 0.4);
+    add('flower', near({ x: W * 0.03 }), 0.2);
+    add('flower', near({ x: W * 0.05, color: 'yellow' }), 0.2);
+    add('snail', near({ x: W * 0.47 }), 0.3);
+    const lane = r.road + roadDepth * 0.82;
+    add('car', near({ x: W * 0.3, y: lane }));
+    add('truck', near({ x: W * 0.72, y: lane, speed: 38 }));
+    add('bus', near({ x: W * 0.05, y: lane, speed: 34 }));
+    add('train', near({ x: W * 0.4, y: r.rail, speed: 42 }), 0.5);
+    add('ship', { x: W * 0.6, y: r.sea + 4, scale: u * SEA_FAR, facing: -1 });
+    add('sailboat', { x: W * 0.2, y: r.sea + 4, scale: u * 0.4 });
+    add('lighthouse', { x: W * 0.96, y: r.sea + 4, scale: u * SEA_FAR, layer: 4 });
+    add('duck', { x: W * 0.4, y: r.sea + 3, scale: u * 0.55 });
+    add('fish', near({ x: W * 0.3, y: r.sea + (H - r.sea) * 0.55 }), 0.3);
+    add('fish', near({ x: W * 0.8, y: r.sea + (H - r.sea) * 0.75, color: 'yellow', facing: -1 }), 0.3);
+    add('airplane', sky({ x: W * 0.1, y: H * 0.2 }));
+    add('helicopter', sky({ x: W * 0.68, y: H * 0.16, facing: -1 }));
+    add('balloon', sky({ x: W * 0.42, y: H * 0.25, scale: u * 0.3 }));
+    add('bird', { x: W * 0.3, y: H * 0.18, scale: u * 0.7 }, 0.3);
+    add('bird', { x: W * 0.36, y: H * 0.23, scale: u * 0.6, color: 'red' }, 0.3);
+    add('butterfly', near({ x: W * 0.12, y: r.walk - 60 * u }), 0.3);
+  }
+
+
+  p.setup = () => {
+    p.createCanvas(p.windowWidth, p.windowHeight);
+    world = Emberley.createWorld(p, { palette: 'makeaworld', seed: 3 });
+    const sel = document.getElementById('palette');
+    Object.keys(Emberley.palettes).forEach((k) => sel.add(new Option(k, k)));
+    const swatches = document.getElementById('swatches');
+    const showPalette = () => {
+      document.body.style.background = world.pal.paper;
+      swatches.innerHTML = '';
+      [...new Set(Object.entries(world.pal)
+        .filter(([k]) => k !== 'paper').map(([, v]) => v))].forEach((c) => {
+        const s = document.createElement('span');
+        s.style.background = c;
+        s.title = c;
+        swatches.appendChild(s);
+      });
+    };
+    sel.onchange = () => { world.setPalette(sel.value); showPalette(); };
+    showPalette();
+    document.getElementById('redraw').onclick = () => build();
+    document.getElementById('boil').onchange = (e) => { world.boil = e.target.checked; };
+    document.getElementById('pen').onchange = (e) => { world.showPen = e.target.checked; };
+    build();
+  };
+
+  p.draw = () => world.frame();
+
+  const skyThings = ['bird', 'butterfly', 'airplane', 'helicopter', 'cloud', 'star', 'balloon'];
+  const landThings = ['person', 'girl', 'king', 'knight', 'soldier', 'cowboy', 'clown',
+    'dog', 'cat', 'blackcat', 'elephant', 'trex', 'horse', 'pig', 'cow', 'flower', 'mushroom', 'tree', 'pine', 'snail',
+    'turtle', 'ladybug', 'flag', 'car'];
+  const seaThings = ['fish', 'duck', 'sailboat'];
+  const colours = ['red', 'orange', 'yellow', 'green', 'blue', 'brown'];
+
+  p.mousePressed = (e) => {
+    if (e && e.target && e.target.tagName !== 'CANVAS') return;
+    const H = p.height, r = rows(H), y = p.mouseY;
+    const pool = y < r.horizon - 10 ? skyThings : y > r.sea + 20 ? seaThings : landThings;
+    const name = pool[Math.floor(Math.random() * pool.length)];
+    // things clicked further down the page are nearer, so bigger
+    let depth = NEAR;
+    if (pool === skyThings) depth = name === 'bird' || name === 'butterfly' ? 0.7 : SKY;
+    else if (pool === landThings) depth = FAR + (NEAR - FAR) * Math.min(1, Math.max(0, (y - r.horizon) / (r.walk - r.horizon)));
+    world.add(name, {
+      x: p.mouseX, y, scale: u * depth,
+      color: colours[Math.floor(Math.random() * colours.length)],
+      facing: Math.random() < 0.5 ? 1 : -1
+    });
+  };
+
+  p.windowResized = () => { p.resizeCanvas(p.windowWidth, p.windowHeight); build(); };
+});
+</script>
+</body>
+</html>
