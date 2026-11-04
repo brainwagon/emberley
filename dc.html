@@ -1,0 +1,857 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A New Day for the United States</title>
+<style>
+  /* The scene is a fixed 1600 x 900 picture, scaled to the width of the
+     window and centred; p5 sets a pixel size on the canvas, which this
+     overrides. */
+  html, body { margin: 0; background: #fbfbf8; overflow-x: hidden; }
+  canvas { display: block; margin: 0 auto; width: 100% !important; height: auto !important; }
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+<script src="emberley.js"></script>
+<script>
+// Crowd sounds, all synthesized with Web Audio (no sound files): a
+// murmur of filtered noise and far-off babbling voices, with random
+// woos, bursts of clapping and whistles, and a big cheer on demand.
+// Browsers only allow sound after the page is clicked or a key is
+// pressed, so it starts then.  The M key mutes and unmutes.
+const Sound = (() => {
+  const R = Math.random;
+  let ac = null, out = null, far = null, NOISE = null, enabled = true, live = 0;
+  const talkers = [];
+  const api = { onEvent: null };
+
+  function makeNoise(secs) {
+    const b = ac.createBuffer(1, Math.floor(ac.sampleRate * secs), ac.sampleRate);
+    const d = b.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;                       // pinkish noise
+    for (let i = 0; i < d.length; i++) {
+      const w = R() * 2 - 1;
+      b0 = 0.99765 * b0 + w * 0.0990460;
+      b1 = 0.96300 * b1 + w * 0.2965164;
+      b2 = 0.57000 * b2 + w * 1.0526913;
+      d[i] = (b0 + b1 + b2 + w * 0.1848) * 0.2;
+    }
+    return b;
+  }
+  const node = (type, props) => {
+    const n = type === 'gain' ? ac.createGain() : type === 'pan' ? ac.createStereoPanner()
+      : ac.createBiquadFilter();
+    if (type !== 'gain' && type !== 'pan') n.type = type;
+    for (const k in props) n[k].value = props[k];
+    return n;
+  };
+  const chain = (...ns) => { for (let i = 1; i < ns.length; i++) ns[i - 1].connect(ns[i]); return ns[0]; };
+  function noiseAt(t, dur) {
+    const s = ac.createBufferSource();
+    s.buffer = NOISE; s.loop = true;
+    s.start(t, R() * NOISE.duration);
+    if (dur) s.stop(t + dur);
+    return s;
+  }
+
+  function init() {
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    NOISE = makeNoise(3);
+    const comp = ac.createDynamicsCompressor();
+    out = node('gain', { gain: 0.9 });
+    chain(out, comp, ac.destination);
+    // everything ambient goes through a muffled "far away" bus
+    far = node('lowpass', { frequency: 1500, Q: 0.3 });
+    far.connect(out);
+    // the murmur bed
+    const bed = node('gain', { gain: 0.1 }), bp = node('bandpass', { frequency: 500, Q: 0.8 });
+    chain(noiseAt(ac.currentTime), bp, bed, far);
+    talkers.push({ bed, bp });
+    // a few babbling voices
+    for (let i = 0; i < 6; i++) {
+      const o = ac.createOscillator();
+      o.type = 'sawtooth';
+      const base = R() < 0.5 ? 100 + R() * 60 : 180 + R() * 80;
+      o.frequency.value = base;
+      const f = node('bandpass', { frequency: 800, Q: 5 }), g = node('gain', { gain: 0 });
+      chain(o, f, g, node('pan', { pan: R() * 2 - 1 }), far);
+      o.start();
+      talkers.push({ o, f, g, base, next: ac.currentTime + R() });
+    }
+    setInterval(tick, 200);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) ac.suspend(); else if (enabled) ac.resume();
+    });
+  }
+
+  // Keeps the babble going a little ahead of time, wanders the murmur,
+  // and now and then sets off a random woo, clap or whistle.
+  function tick() {
+    if (!enabled || ac.state !== 'running') return;
+    const now = ac.currentTime;
+    for (const k of talkers) {
+      if (k.bed) {
+        k.bed.gain.setTargetAtTime(0.07 + R() * 0.09, now, 0.7);
+        k.bp.frequency.setTargetAtTime(350 + R() * 450, now, 0.9);
+        continue;
+      }
+      if (k.next < now) k.next = now;
+      while (k.next < now + 0.6) {
+        const t = k.next, dur = 0.07 + R() * 0.16;
+        k.f.frequency.setValueAtTime(300 + R() * 1900, t);
+        k.o.frequency.setTargetAtTime(k.base * (0.85 + R() * 0.35), t, 0.04);
+        k.g.gain.setTargetAtTime(0.012, t, 0.015);
+        k.g.gain.setTargetAtTime(0, t + dur, 0.03);
+        k.next = t + dur + (R() < 0.15 ? 0.3 + R() * 0.9 : 0.03 + R() * 0.08);
+      }
+    }
+    if (R() < 0.07) {
+      const roll = R(), size = roll < 0.12 ? 0.35 : 0.1;
+      const p = api.onEvent ? api.onEvent(size) : R() * 2 - 1;
+      const t = now + 0.05;
+      if (roll < 0.12) cheer(p, size);
+      else if (roll < 0.55) voice(t, p, 0.05 + R() * 0.04);
+      else if (roll < 0.85) { for (let i = 0, n = 5 + R() * 10; i < n; i++) clap(t + R() * 1.2, p + (R() - 0.5) * 0.3, 0.12); }
+      else whistle(t, p);
+    }
+  }
+
+  // One cheering voice: a buzzy pitch glide through two vowel formants
+  // ("woo", "yay", "hey").
+  function voice(t, p, loud, dest) {
+    if (live > 70) return;
+    live++;
+    const f0 = R() < 0.5 ? 140 + R() * 90 : 240 + R() * 170, dur = 0.45 + R() * 0.75;
+    const vowel = [[330, 800, 360, 900], [720, 1750, 380, 2300], [600, 1900, 450, 2100]][Math.floor(R() * 3)];
+    const o = ac.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f0 * 0.9, t);
+    o.frequency.linearRampToValueAtTime(f0 * (1.3 + R() * 0.45), t + 0.12 + R() * 0.12);
+    o.frequency.linearRampToValueAtTime(f0 * (0.75 + R() * 0.2), t + dur);
+    const lfo = ac.createOscillator(), depth = node('gain', { gain: f0 * 0.035 });
+    lfo.frequency.value = 5 + R() * 2;
+    chain(lfo, depth, o.frequency);
+    const env = node('gain', { gain: 0 });
+    const f1 = node('bandpass', { frequency: vowel[0], Q: 6 });
+    const f2 = node('bandpass', { frequency: vowel[1], Q: 8 });
+    f1.frequency.linearRampToValueAtTime(vowel[2], t + dur);
+    f2.frequency.linearRampToValueAtTime(vowel[3], t + dur);
+    const g2 = node('gain', { gain: 0.6 });
+    o.connect(f1); o.connect(f2);
+    f1.connect(env); chain(f2, g2, env);
+    chain(env, node('pan', { pan: clampPan(p) }), dest || far);
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(loud, t + 0.05);
+    env.gain.setValueAtTime(loud, t + dur * 0.65);
+    env.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+    o.start(t); lfo.start(t);
+    o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
+    o.onended = () => { live--; };
+  }
+
+  function clap(t, p, loud, dest) {
+    const env = node('gain', { gain: 0 });
+    chain(noiseAt(t, 0.15), node('bandpass', { frequency: 1100 + R() * 1300, Q: 1.3 }), env,
+          node('pan', { pan: clampPan(p) }), dest || far);
+    env.gain.setValueAtTime(loud * (0.6 + R() * 0.6), t);
+    env.gain.exponentialRampToValueAtTime(0.001, t + 0.05 + R() * 0.05);
+  }
+
+  // kind 0: a wolf whistle (up, then down); 1: a long shrill rising
+  // one, with a finger-whistle warble; 2: a quick double "tweet tweet".
+  function whistle(t, p, dest, kind = Math.floor(R() * 3)) {
+    const o = ac.createOscillator(), env = node('gain', { gain: 0 }), g = env.gain;
+    const f = 1700 + R() * 900, lvl = 0.04 + R() * 0.025;
+    let end;
+    o.type = 'sine';
+    if (kind === 0) {
+      o.frequency.setValueAtTime(f, t);
+      o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.25);
+      o.frequency.setValueAtTime(f * 1.15, t + 0.4);
+      o.frequency.exponentialRampToValueAtTime(f * 0.75, t + 0.85);
+      g.setValueAtTime(0, t);
+      g.linearRampToValueAtTime(lvl, t + 0.04);
+      g.setValueAtTime(lvl, t + 0.3);
+      g.linearRampToValueAtTime(0, t + 0.34);
+      g.linearRampToValueAtTime(lvl * 0.9, t + 0.42);
+      g.exponentialRampToValueAtTime(0.0008, t + 0.9);
+      end = t + 0.95;
+    } else if (kind === 1) {
+      const dur = 0.7 + R() * 0.6;
+      o.frequency.setValueAtTime(f * 1.2, t);
+      o.frequency.exponentialRampToValueAtTime(f * 1.75, t + dur * 0.8);
+      o.frequency.exponentialRampToValueAtTime(f * 1.6, t + dur);
+      const lfo = ac.createOscillator(), depth = node('gain', { gain: f * 0.03 });
+      lfo.frequency.value = 9 + R() * 5;
+      chain(lfo, depth, o.frequency);
+      lfo.start(t); lfo.stop(t + dur + 0.05);
+      g.setValueAtTime(0, t);
+      g.linearRampToValueAtTime(lvl, t + 0.06);
+      g.setValueAtTime(lvl, t + dur * 0.8);
+      g.exponentialRampToValueAtTime(0.0008, t + dur);
+      end = t + dur + 0.05;
+    } else {
+      const f2 = f * 1.4;
+      [0, 0.2].forEach((dt) => {
+        o.frequency.setValueAtTime(f2, t + dt);
+        o.frequency.exponentialRampToValueAtTime(f2 * 1.12, t + dt + 0.1);
+        g.setValueAtTime(0, t + dt);
+        g.linearRampToValueAtTime(lvl, t + dt + 0.02);
+        g.setValueAtTime(lvl, t + dt + 0.09);
+        g.linearRampToValueAtTime(0, t + dt + 0.12);
+      });
+      end = t + 0.36;
+    }
+    chain(o, env, node('pan', { pan: clampPan(p) }), dest || far);
+    o.start(t); o.stop(end);
+  }
+
+  const clampPan = (p) => Math.max(-1, Math.min(1, p));
+
+  // A cheer: a swelling roar, a burst of voices and a round of applause,
+  // centred on pan position p (-1 left .. 1 right).  size 1 is a big one.
+  function cheer(p = 0, size = 1) {
+    wake();
+    if (!ac || !enabled) return;
+    const t = ac.currentTime + 0.03, near = size >= 0.5 ? out : far;
+    [[1000, 0.6, 1.1], [2400, 1.1, 0.5]].forEach(([fq, q, lvl]) => {
+      const env = node('gain', { gain: 0 });
+      chain(noiseAt(t, 4.5), node('bandpass', { frequency: fq, Q: q }), env,
+            node('pan', { pan: clampPan(p * 0.6) }), near);
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(lvl * size, t + 0.35);
+      env.gain.setTargetAtTime(lvl * size * 0.7, t + 0.5, 0.4);
+      env.gain.setTargetAtTime(0, t + 1.5, 0.6);
+    });
+    for (let i = 0, n = 16 * size; i < n; i++) {
+      voice(t + R() * 0.6, p + (R() - 0.5) * 0.9, 0.08 + R() * 0.07, near);
+    }
+    // applause: a quick early burst, then a long ragged patter
+    for (let i = 0, n = 60 * size; i < n; i++) {
+      clap(t + 0.1 + R() * 0.9, p + (R() - 0.5) * 1.3, 0.3, near);
+    }
+    for (let i = 0, n = 110 * size; i < n; i++) {
+      clap(t + 0.3 + Math.pow(R(), 1.3) * 3.6, p + (R() - 0.5) * 1.4, 0.26, near);
+    }
+    // and plenty of whistles
+    for (let i = 0, n = Math.round((3 + R() * 2) * size); i < n; i++) {
+      whistle(t + 0.15 + R() * 1.8, p + (R() - 0.5) * 1.2, near);
+    }
+  }
+
+  function wake() {
+    if (!enabled) return;
+    if (!ac) init();
+    if (ac.state !== 'running') ac.resume();
+  }
+  function toggle() {
+    enabled = !enabled;
+    if (!ac) { wake(); return; }
+    if (enabled) ac.resume(); else ac.suspend();
+  }
+
+  ['pointerdown', 'keydown'].forEach((e) =>
+    document.addEventListener(e, wake, { capture: true }));
+  document.addEventListener('keydown', (e) => { if (e.key === 'm' || e.key === 'M') toggle(); });
+
+  return Object.assign(api, { cheer, wake, toggle });
+})();
+</script>
+<script>
+// A Washington, DC scene made from the emberley.js shape alphabet: a
+// big bright sun over the Capitol, the Washington Monument and the
+// White House, with a huge crowd in front waving blue flags.
+// How fast a crowd member's flag ripples (also used by the sprite cache).
+const waveSpeed = (o) => o.waveSpeed || 6 + o.freq * 2;
+
+(() => {
+  const A = Emberley.anim;
+  const { ellipsePts, rotPts } = Emberley.util;
+  const PI = Math.PI, TAU = PI * 2;
+
+  // White marble: a pale grey fill with a thin black outline, so the
+  // buildings stay solid and readable on the white paper.
+  const marble = (o) => Object.assign({ fill: 'grey', fillAlpha: 0.26, ink: 'black', w: 0.75 }, o);
+  const dome = (o) => marble(Object.assign({ fillAlpha: 0.42 }, o));
+  const halfDisc = (x, y, rx, ry) => [x - rx, y].concat(ellipsePts(x, y, rx, ry, PI, PI, 2));
+  const thin = { w: 0.55 };
+
+  // A small US flag on a pole, waving.  Pole foot at (x, y).
+  function usFlag(d, name, x, y, h, fw) {
+    const top = y - h, fh = fw * 0.6;
+    d.line(x, y, x, top, { w: 0.8 });
+    d.part(name, A.wave(fh * 0.18, fw * 0.6, 5, x, top));
+    d.in(name, () => {
+      d.rect(x, top, fw, fh, { fill: 'red' });
+      for (let i = 1; i < 3; i++) {
+        d.line(x, top + fh * i / 3, x + fw, top + fh * i / 3, { ink: 'paper', w: 0.5 });
+      }
+      d.rect(x, top, fw * 0.42, fh * 0.55, { fill: 'blue', knock: true });
+    });
+  }
+
+  // ---- the bright sun ------------------------------------------------
+  Emberley.define('bigsun', {
+    tags: ['sky'], size: [140, 140], origin: 'center', layer: 0,
+    build(d) {
+      d.step();
+      d.part('glow', { pivot: [0, 0], sx: (t) => 1 + 0.05 * Math.sin(t * 1.6),
+                       sy: (t) => 1 + 0.05 * Math.sin(t * 1.6) });
+      d.circle(0, 0, 70, { fill: 'yellow', fillAlpha: 0.14, ink: 'none', knock: false,
+                           density: 0.7, part: 'glow' });
+      d.circle(0, 0, 52, { fill: 'yellow', fillAlpha: 0.22, ink: 'none', knock: false,
+                           part: 'glow' });
+      d.step(); d.circle(0, 0, 30, { fill: 'yellow' });
+      d.step();
+      d.dot(-10, -5, { r: 2.4 }); d.dot(10, -5, { r: 2.4 });
+      d.dot(-17, 6, { ink: 'red', r: 3.4, knock: true });
+      d.dot(17, 6, { ink: 'red', r: 3.4, knock: true });
+      d.arc(0, 2, 13, 0.2 * PI, 0.8 * PI, { w: 1.1 });
+      d.step();
+      d.part('rays', A.spin(0.18));
+      d.in('rays', () => {
+        for (let k = 0; k < 16; k++) {
+          const a = k / 16 * TAU, long = k % 2 === 0;
+          const r0 = 37, r1 = long ? 68 : 52;
+          d.line(Math.cos(a) * r0, Math.sin(a) * r0, Math.cos(a) * r1, Math.sin(a) * r1,
+                 { ink: long ? 'orange' : 'yellow', w: long ? 1.6 : 2.4 });
+        }
+      });
+    }
+  });
+
+  // ---- hand-lettered title -------------------------------------------
+  // A tiny single-stroke capital alphabet, 100 units tall, baseline at
+  // y = 0.  Each letter is a list of strokes; a stroke is
+  // [points, smooth] where smooth strokes are drawn as curves.
+  const LETTERS = {
+    A: [70, [[[0, 0, 35, -100, 70, 0]], [[15, -38, 55, -38]]]],
+    D: [62, [[[0, 0, 0, -100]], [[0, -100, 32, -96, 58, -66, 60, -36, 36, -4, 0, 0], 1]]],
+    E: [52, [[[52, -100, 0, -100, 0, 0, 52, 0]], [[0, -52, 40, -52]]]],
+    F: [50, [[[50, -100, 0, -100, 0, 0]], [[0, -54, 40, -54]]]],
+    H: [60, [[[0, -100, 0, 0]], [[60, -100, 60, 0]], [[0, -52, 60, -52]]]],
+    I: [0, [[[0, -100, 0, 0]]]],
+    N: [64, [[[0, 0, 0, -100, 64, 0, 64, -100]]]],
+    O: [72, [[ellipsePts(36, -50, 36, 50, -PI / 2, -TAU - 0.15, 4), 0]]],
+    R: [58, [[[0, 0, 0, -100]], [[0, -100, 38, -98, 56, -78, 44, -56, 0, -52], 1],
+             [[22, -52, 58, 0]]]],
+    S: [56, [[[54, -86, 30, -100, 6, -90, 4, -70, 28, -53, 52, -34, 52, -12, 28, 0, 2, -12], 1]]],
+    T: [64, [[[0, -100, 64, -100]], [[32, -100, 32, 0]]]],
+    U: [62, [[[0, -100, 0, -36, 8, -8, 31, 0, 54, -8, 62, -36, 62, -100], 1]]],
+    W: [92, [[[0, -100, 22, 0, 46, -72, 70, 0, 92, -100]]]],
+    Y: [66, [[[0, -100, 33, -50, 66, -100]], [[33, -50, 33, 0]]]]
+  };
+  const GAP = 24, WORD = 72;            // between letters, between words
+  const textWidth = (text) => [...text].reduce((w, ch) =>
+    w + (LETTERS[ch] ? LETTERS[ch][0] + GAP : WORD - GAP), -GAP);
+  Emberley.textWidth = textWidth;
+
+  // Options: text (capitals and spaces), colors (cycled per letter), w
+  // (stroke weight).  Centred on x = 0, sitting on y = 0.  Each letter
+  // is tipped and nudged a little, and bobs gently once it's written.
+  Emberley.define('lettering', {
+    tags: ['scenery'], size: [600, 100], layer: 0.8,
+    defaults: { text: 'HELLO', colors: ['red', 'blue'], w: 3.2 },
+    build(d, o) {
+      let x = -textWidth(o.text) / 2, k = 0;
+      [...o.text].forEach((ch, i) => {
+        const L = LETTERS[ch];
+        if (!L) { x += WORD - GAP; return; }
+        const [lw, strokes] = L;
+        const tip = (d.rnd() - 0.5) * 0.14, dy = (d.rnd() - 0.5) * 8;
+        const ink = o.colors[k % o.colors.length], part = 'L' + i;
+        d.step();
+        d.part(part, A.bob(2.2, 0.4, k * 0.7));
+        strokes.forEach(([pts, smooth]) => {
+          const at = rotPts(pts.map((v, j) => j % 2 ? v + dy : v + x), tip, x + lw / 2, -50);
+          const so = { ink, w: o.w, part };
+          if (smooth) d.curve(at, so); else d.path(at, so);
+        });
+        x += lw + GAP; k++;
+      });
+    }
+  });
+
+  // ---- the Capitol ---------------------------------------------------
+  Emberley.define('capitol', {
+    tags: ['buildings'], size: [300, 182], layer: 1,
+    build(d) {
+      // the two wings, each with its own little portico
+      d.step();
+      d.rect(-150, -48, 106, 48, marble());
+      d.rect(44, -48, 106, 48, marble());
+      d.step();
+      [-97, 97].forEach((c) => {
+        for (let x = c - 21; x <= c + 21; x += 7) d.line(x, -48, x, -4, thin);
+        d.line(c - 25, -4, c + 25, -4, thin);
+        d.tri(c - 26, -48, c, -62, c + 26, -48, marble());
+      });
+      d.step();
+      [-146, -136, -58, -48, 44 + 4, 44 + 14, 136, 146].forEach((x) => {
+        d.rect(x - 2.5, -40, 5, 9, { fill: 'blue' });
+        d.rect(x - 2.5, -22, 5, 9, { fill: 'blue' });
+      });
+      // the middle block, its columns, pediment and steps
+      d.step();
+      d.rect(-44, -66, 88, 66, marble());
+      d.rect(-40, -80, 80, 14, marble());
+      d.step();
+      for (let x = -28; x <= 28; x += 8) d.line(x, -66, x, -14, thin);
+      d.tri(-34, -66, 0, -79, 34, -66, marble());
+      d.poly([-30, -14, 30, -14, 42, 0, -42, 0], marble());
+      d.line(-34, -9, 34, -9, thin); d.line(-38, -4.5, 38, -4.5, thin);
+      // the drum, ringed with columns
+      d.step();
+      d.rect(-36, -104, 72, 24, marble());
+      for (let x = -30; x <= 30; x += 6) d.line(x, -102, x, -82, thin);
+      d.rect(-30, -116, 60, 12, marble());
+      for (let x = -24; x <= 24; x += 8) d.dot(x, -110, { r: 1.4 });
+      // the dome
+      d.step();
+      d.poly(halfDisc(0, -116, 30, 36), dome());
+      [-20, -10, 10, 20].forEach((k) =>
+        d.curve([k, -116, k * 0.8, -134, k * 0.32, -148], thin));
+      d.line(0, -116, 0, -152, thin);
+      // the lantern and the statue on top
+      d.step();
+      d.rect(-6, -164, 12, 12, marble());
+      d.poly(halfDisc(0, -164, 7, 6), dome());
+      d.line(0, -170, 0, -177, { w: 1.2 });
+      d.dot(0, -179, { r: 2.4 });
+    }
+  });
+
+  // ---- the White House -----------------------------------------------
+  Emberley.define('whitehouse', {
+    tags: ['buildings'], size: [224, 110], layer: 1,
+    build(d) {
+      d.step();
+      d.line(0, -66, 0, -108, { w: 1 });
+      d.rect(-112, -30, 34, 30, marble());
+      d.rect(78, -30, 34, 30, marble());
+      d.rect(-80, -60, 160, 60, marble());
+      d.rect(-83, -67, 166, 7, marble());
+      d.step();
+      for (let x = -80; x <= 80; x += 6) d.line(x, -67, x, -60, { w: 0.4 });
+      d.step();
+      [-70, -56, -42, 36, 50, 64].forEach((x) => {
+        d.tri(x - 1, -50, x + 3.5, -55, x + 8, -50, { fill: 'grey' });
+        d.rect(x, -49, 7, 10, { fill: 'blue' });
+        d.rect(x, -25, 7, 11, { fill: 'blue' });
+      });
+      [-104, -94, 88, 98].forEach((x) => d.rect(x, -22, 6, 9, { fill: 'blue' }));
+      // the portico
+      d.step();
+      d.tri(-32, -60, 0, -80, 32, -60, marble());
+      d.dot(0, -67, { r: 1.6 });
+      d.rect(-30, -60, 60, 6, marble());
+      for (let x = -26; x <= 26; x += 7.4) d.line(x, -54, x, -4, { w: 0.7 });
+      d.rect(-5, -20, 10, 20, { fill: 'brown' });
+      d.dot(0, -26, { ink: 'yellow', r: 2.2, knock: true });
+      d.poly([-30, -4, 30, -4, 36, 0, -36, 0], marble());
+      // the flag on the roof, and two round bushes out front
+      d.step();
+      usFlag(d, 'flag', 0, -66, 42, 26);
+      d.step();
+      d.circle(-50, -6, 9, { fill: 'green' });
+      d.circle(50, -6, 9, { fill: 'green' });
+    }
+  });
+
+  // ---- the Washington Monument ----------------------------------------
+  Emberley.define('monument', {
+    tags: ['buildings'], size: [110, 310], layer: 1,
+    build(d) {
+      d.step();
+      d.poly(halfDisc(0, 0, 66, 11), { fill: 'green' });
+      // the stone changes colour a third of the way up
+      d.step();
+      d.poly([-11, 0, -10, -90, 10, -90, 11, 0], marble({ fillAlpha: 0.4 }));
+      d.poly([-10, -90, -7.5, -290, 7.5, -290, 10, -90], marble());
+      d.tri(-7.5, -290, 0, -308, 7.5, -290, dome());
+      d.step();
+      d.rect(-4, -282, 2.5, 4, { fill: 'black' });
+      d.rect(1.5, -282, 2.5, 4, { fill: 'black' });
+      d.dot(0, -307, { ink: 'red', r: 1.6, knock: true });
+      // the ring of flags around its foot
+      d.step();
+      [-50, -40, -30, -20, 18, 28, 38, 48].forEach((x, i) =>
+        usFlag(d, 'f' + i, x, -3, 34, 11));
+    }
+  });
+
+  // ---- a person in the crowd, waving a blue flag ------------------------
+  // Options: skin, color (shirt), hair, style (hair style 0-5), dress,
+  // flag (its colour) or us (a little US flag, with `stripes` 1-3),
+  // freq/phase (how fast they wave), cheer (both arms up), simple
+  // (no face, for the far-away rows), legs.
+  Emberley.define('waver', {
+    tags: ['people'], size: [60, 136], layer: 2,
+    defaults: { color: 'red', skin: 'orange', hair: 'brown', style: 0,
+                flag: 'blue', freq: 1.1, phase: 0, legs: true },
+    build(d, o) {
+      const hx = 0, hy = -84;
+      // hair that sits behind the head goes first
+      d.step();
+      if (o.style === 1) d.rect(-10.5, -91, 21, 21, { fill: o.hair });
+      if (o.style === 5) d.circle(0, -87, 13, { fill: o.hair });
+      d.circle(hx, hy, 9, { fill: o.skin });
+      d.step();
+      if (!o.simple) {
+        d.dot(-3.2, -85); d.dot(3.2, -85);
+        d.arc(0, -83, 4.3, 0.2 * PI, 0.8 * PI, { w: 0.8 });
+      }
+      d.step();
+      if (o.style === 0 || o.style === 1) {
+        d.arc(hx, hy, 9.5, 1.1 * PI, 1.9 * PI, { ink: o.hair, w: 2.4 });
+      } else if (o.style === 2) {
+        d.arc(hx, hy, 10, 1.05 * PI, 1.95 * PI, { ink: o.hair, w: 2.6 });
+        d.circle(-12, hy, 4, { fill: o.hair }); d.circle(12, hy, 4, { fill: o.hair });
+      } else if (o.style === 3) {
+        d.poly(halfDisc(0, -86, 9.6, 9), { fill: o.hat });
+        d.line(0, -86, 15, -86, { ink: o.hat, w: 1.8 });
+      } else if (o.style === 4) {
+        d.rect(-7, -106, 14, 15, { fill: o.hat });
+        d.line(-12, -91, 12, -91, { ink: o.hat, w: 1.8 });
+        if (o.hat !== 'blue') d.line(-7, -95, 7, -95, { ink: 'blue', w: 1.6 });
+      }
+      d.step();
+      // a white shirt needs an outline to show up on the paper
+      const shirt = { fill: o.color, ink: o.color === 'paper' ? 'black' : undefined, w: 0.7 };
+      if (o.dress) d.tri(0, -74, -15, -38, 15, -38, shirt);
+      else d.rect(-9, -73, 18, 33, shirt);
+      // the flag arm, with the stick and the flag riding on it
+      d.step();
+      d.part('arm', A.swing(o.amp != null ? o.amp : 0.38, o.freq, 8, -70, o.phase));
+      d.in('arm', () => {
+        d.line(8, -70, 17, -95, { w: 1.1 });
+        d.line(17, -92, 19, -134, { w: 0.9 });
+        if (!o.simple) d.dot(17, -95, { r: 2 });
+      });
+      d.part('flag', Object.assign(A.wave(2.6, 13, waveSpeed(o), 19, -134), { parent: 'arm' }));
+      d.in('flag', () => {
+        if (!o.us) { d.rect(19, -134, 25, 16, { fill: o.flag }); return; }
+        // a little US flag: red with white stripes and a blue corner;
+        // far-off flags are tiny, so they get fewer stripes
+        d.rect(19, -134, 25, 16, { fill: 'red' });
+        const n = o.stripes || 3;
+        for (let i = 1; i <= n; i++) {
+          const y = -134 + 16 * i / (n + 1);
+          d.line(19, y, 44, y, { ink: 'paper', w: n > 1 ? 0.6 : 0.5 });
+        }
+        d.rect(19, -134, 11, 9, { fill: 'blue' });
+        if (n > 2) [[22, -131], [27, -131], [24.5, -127]].forEach(([x, y]) =>
+          d.dot(x, y, { ink: 'paper', r: 0.9, knock: true }));
+      });
+      // the other arm: down by their side, or up in a cheer
+      d.step();
+      if (o.cheer) {
+        d.part('arm2', A.swing(0.25, o.freq * 1.3, -8, -70, o.phase + 1));
+        d.line(-8, -70, -16, -94, { w: 1.1, part: 'arm2' });
+        if (!o.simple) d.dot(-16, -94, { r: 2, part: 'arm2' });
+      } else {
+        d.line(-8, -70, -15, -48, { w: 1.1 });
+        if (!o.simple) d.dot(-15, -48, { r: 2 });
+      }
+      if (o.legs) {
+        d.step();
+        d.line(-5, -40, -5, -1, { w: 1.3 }); d.line(5, -40, 5, -1, { w: 1.3 });
+      }
+    }
+  });
+})();
+
+new p5((p) => {
+  let world, crowd = [], u = 1;
+  const PI = Math.PI, TAU = Math.PI * 2;
+
+  const pick = (r, arr) => arr[Math.floor(r() * arr.length)];
+  const SKIN = ['#f6c9a0', '#eeb48a', '#d99a6c', '#b87a4b', '#8d5a36', '#6a4128', 'orange'];
+  const SHIRT = ['red', 'yellow', 'orange', 'black', 'grey', 'red', 'yellow', 'paper',
+                 '#f59ac0', '#8e5bb5'];
+  const HAIR = ['black', 'black', '#5b3a1e', '#7a4a24', 'yellow', 'brown', 'red'];
+  const HAT = ['red', 'black', 'green', 'yellow', 'blue'];
+
+  // Each crowd member hops now and then; a cheer (from a click or the
+  // button) sends a ripple of big jumps out from a point.
+  function cheering(it) {
+    const o = it.opts, w = it.world;
+    let hop = Math.max(0, Math.sin(it.t * o.hop + o.ph)) * o.hopAmp;
+    const since = w.time - (it.cheerAt == null ? -99 : it.cheerAt);
+    if (since > 0 && since < 1.4) hop += Math.abs(Math.sin(since * PI * 2.2)) * 9 * (1 - since / 1.4);
+    it.oy = -hop * it.scale;
+    it.rot = 0.04 * Math.sin(it.t * o.hop * 0.5 + o.ph);
+  }
+  // ---- sprite cache for the crowd ---------------------------------------
+  // Hundreds of people drawn shape by shape every frame is far too slow,
+  // so once someone has been drawn in, their still parts (head, hair,
+  // shirt, legs) are drawn once into a small bitmap per "boil" variant
+  // and stamped from then on.  The waving arm with its stick and flag
+  // is shared by everyone in a row: a bitmap per boil variant and per
+  // frame of the flag's wave, turned at the shoulder.
+  const VARIANTS = 3, WAVE_FRAMES = 12, PAD = 5;         // PAD in px
+  const BODY = { box: [-18, -107, 36, 107] };
+  const ARM = { box: [4, -140, 44, 76], pivot: [8, -70] };
+  const ARM2 = { box: [-20, -98, 16, 32], pivot: [-8, -70] };
+  let templates = {};
+
+  // The bitmaps are packed into a few big atlas canvases: the GPU is
+  // much happier stamping from a handful of large textures than from
+  // thousands of tiny ones.
+  const ATLAS = 2048;
+  let atlas = { pages: [], x: 0, y: 0, rowH: 0 };
+  function alloc(w, h) {
+    const A = atlas;
+    if (A.x + w > ATLAS) { A.x = 0; A.y += A.rowH + 1; A.rowH = 0; }
+    if (!A.pages.length || A.y + h > ATLAS) {
+      const c = document.createElement('canvas');
+      c.width = c.height = ATLAS;
+      A.pages.push(c);
+      A.x = A.y = A.rowH = 0;
+    }
+    const r = { c: A.pages[A.pages.length - 1], x: A.x, y: A.y, w, h };
+    A.x += w + 1;
+    A.rowH = Math.max(A.rowH, h);
+    return r;
+  }
+
+  // Draws the prims of `it` that pass `keep` into a new atlas slot,
+  // using boil variant `vi` at animation time `t`.
+  function sprite(it, box, keep, vi, t) {
+    const pd = p.pixelDensity(), s = it.scale, w = it.world;
+    const r = alloc(Math.ceil((box[2] * s + 2 * PAD) * pd),
+                    Math.ceil((box[3] * s + 2 * PAD) * pd));
+    const g = r.c.getContext('2d');
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.beginPath(); g.rect(r.x, r.y, r.w, r.h); g.clip();
+    g.setTransform(pd, 0, 0, pd, r.x, r.y);
+    g.globalCompositeOperation = 'multiply';
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    const saved = [it.x, it.y, it.ox, it.oy, it.rot, it.facing, it.t, w.boil];
+    const skips = it.prims.map((pr) => pr.skip);
+    it.x = PAD - box[0] * s; it.y = PAD - box[1] * s;
+    it.ox = it.oy = it.rot = 0; it.facing = 1; it.t = t; w.boil = true;
+    it.prims.forEach((pr) => { pr.skip = pr.skip || !keep(pr); });
+    // the library picks the boil variant from the clock; pick a time
+    // that lands on variant vi
+    Emberley.Item.prototype.draw.call(it, g, (vi + 0.5 - (it.seed % 5) / 5) / w.boilRate, null);
+    it.prims.forEach((pr, i) => { pr.skip = skips[i]; });
+    [it.x, it.y, it.ox, it.oy, it.rot, it.facing, it.t, w.boil] = saved;
+    g.restore();
+    return r;
+  }
+
+  // The shared arms for one row (two of them, so not every flag in a
+  // row has exactly the same wobble).
+  function template(o, s) {
+    const key = o.row + ':' + o.tpl + ':' + (o.us ? 'us' : 'blue');
+    if (!templates[key]) {
+      const it = new Emberley.Item(world, 'waver', {
+        natural: false, scale: s, simple: o.simple, cheer: true, legs: false,
+        us: o.us, stripes: o.stripes,
+        amp: 0, phase: -1, waveSpeed: 1, instant: true, seed: 977 + o.row * 31 + o.tpl
+      });
+      templates[key] = { it, arm: [], arm2: [] };
+    }
+    return templates[key];
+  }
+
+  function flushSprites() {
+    templates = {};
+    atlas = { pages: [], x: 0, y: 0, rowH: 0 };
+    crowd.forEach((it) => { it.sprites = null; });
+  }
+
+  // Replaces Item.draw for crowd members once they are drawn in.
+  function drawCrowdMember(ctx, now, tips) {
+    const it = this, w = it.world;
+    // while being drawn in, only some crowd members show their pen
+    if (!it.drawn) return Emberley.Item.prototype.draw.call(it, ctx, now, it.opts.pen ? tips : null);
+    const o = it.opts, s = it.scale, t = it.t, pd = p.pixelDensity();
+    const vi = w.boil ? Math.floor(now * w.boilRate + (it.seed % 5) / 5) % VARIANTS : 0;
+    const body = it.sprites || (it.sprites = []);
+    if (!body[vi]) body[vi] = sprite(it, BODY.box, (pr) => !pr.part, vi, 0);
+    const T = template(o, s);
+    const ph = ((t * waveSpeed(o) / TAU) % 1 + 1) % 1;
+    const fr = Math.min(WAVE_FRAMES - 1, Math.floor(ph * WAVE_FRAMES));
+    const arms = T.arm[vi] || (T.arm[vi] = []);
+    if (!arms[fr]) {
+      arms[fr] = sprite(T.it, ARM.box, (pr) => /(^|\.)(arm|flag)$/.test(pr.part || ''),
+                        vi, fr / WAVE_FRAMES * TAU);
+    }
+    const stamp = (r, box) => ctx.drawImage(r.c, r.x, r.y, r.w, r.h,
+      box[0] * s - PAD, box[1] * s - PAD, r.w / pd, r.h / pd);
+    const limb = (c, L, a) => {
+      const px = L.pivot[0] * s, py = L.pivot[1] * s;
+      ctx.save();
+      ctx.translate(px, py); ctx.rotate(a); ctx.translate(-px, -py);
+      stamp(c, L.box);
+      ctx.restore();
+    };
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.translate(it.x + it.ox, it.y + it.oy);
+    if (it.rot) ctx.rotate(it.rot * it.facing);
+    ctx.scale(it.facing, 1);
+    stamp(body[vi], BODY.box);
+    limb(arms[fr], ARM, o.amp * Math.sin(TAU * o.freq * t + o.phase));
+    if (o.cheer) {
+      if (!T.arm2[vi]) T.arm2[vi] = sprite(T.it, ARM2.box, (pr) => /(^|\.)arm2$/.test(pr.part || ''), vi, 0);
+      limb(T.arm2[vi], ARM2, 0.25 * Math.sin(TAU * o.freq * 1.3 * t + o.phase + 1));
+    }
+    ctx.restore();
+  }
+
+  const layout = () => {
+    const W = p.width, H = p.height;
+    return { W, H, horizon: H * 0.58, crowdTop: H * 0.66, crowdBottom: H * 1.12 };
+  };
+
+  function build() {
+    const L = layout(), W = L.W, H = L.H, hz = L.horizon;
+    u = Math.min(W / 1500, H / 950);
+    const r = Emberley.util.rng32(20260704);
+    world.clear();
+    crowd = [];
+    flushSprites();
+    const add = (name, o) => world.add(name, Object.assign({ natural: false }, o));
+
+    add('ground', { x: W / 2, y: hz, width: W + 40, depth: H - hz + 10, delay: 0.2, drawTime: 1.5 });
+    // the title, in two hand-lettered lines across the top, and the sun
+    // shining on the right, above the White House
+    const sunS = Math.max(0.7, u * 1.25), sunX = W * 0.83;
+    add('bigsun', { x: sunX, y: H * 0.17, scale: sunS, drawTime: 3 });
+    const lines = ['A NEW DAY FOR THE', 'UNITED STATES'];
+    const left = W * 0.03, right = sunX - 92 * sunS;
+    const cap = Math.min(H * 0.075, (right - left) / Emberley.textWidth(lines[0]) * 100);
+    const base = H * 0.05 + cap;
+    lines.forEach((text, i) => add('lettering', {
+      text, x: (left + right) / 2, y: base + i * cap * 1.4, scale: cap / 100,
+      colors: i ? ['blue', 'red'] : ['red', 'blue'], delay: 0.6 + i * 3.4, drawTime: 3.4
+    }));
+
+    // the three landmarks, Capitol on the left, White House on the right
+    add('monument', { x: W * 0.5, y: hz, scale: u * 1.0, delay: 1, drawTime: 5 });
+    add('capitol', { x: W * 0.19, y: hz, scale: u * 1.25, delay: 1.6, drawTime: 9 });
+    add('whitehouse', { x: W * 0.8, y: hz, scale: u * 1.2, delay: 2.4, drawTime: 7 });
+
+    // cherry blossoms and shade trees along the Mall
+    const pink = '#f59ac0';
+    [[0.035, pink], [0.37, 'green'], [0.42, pink], [0.585, pink], [0.635, 'green'],
+     [0.955, pink], [0.68, pink]].forEach(([x, c], i) => {
+      add('tree', { x: W * x, y: hz + 3, scale: u * (0.55 + 0.1 * (i % 2)), color: c,
+                    fruit: c === pink ? false : 'red', delay: 4 + i * 0.4 });
+    });
+
+    add('cloud', { x: W * 0.07, y: H * 0.37, scale: u * 1.4, delay: 3 });
+    add('cloud', { x: W * 0.64, y: H * 0.4, scale: u * 1.1, delay: 3.5, speed: 8 });
+    add('bird', { x: W * 0.3, y: H * 0.34, scale: u * 0.8, delay: 4 });
+    add('bird', { x: W * 0.36, y: H * 0.39, scale: u * 0.65, color: 'red', delay: 4.3 });
+    add('helicopter', { x: W * 0.68, y: H * 0.3, scale: u * 0.55, color: 'green',
+                        facing: -1, delay: 5 });
+
+    // the crowd: rows from the back (small, high up) to the front
+    // (big, cut off by the bottom of the page)
+    const rows = 13;
+    let people = [];
+    for (let i = 0; i < rows; i++) {
+      const f = i / (rows - 1);
+      const y = L.crowdTop + (L.crowdBottom - L.crowdTop) * Math.pow(f, 1.15);
+      const s = u * (0.32 + 0.98 * f);
+      const gap = 30 * s;
+      for (let x = -gap * r(); x < W + gap; x += gap * (0.8 + r() * 0.45)) {
+        const style = Math.floor(r() * 6);
+        people.push({
+          x, y: y + (r() - 0.5) * 8 * s, scale: s, row: i,
+          skin: pick(r, SKIN), color: pick(r, SHIRT), hair: pick(r, HAIR),
+          hat: pick(r, HAT), style, dress: r() < 0.25,
+          facing: r() < 0.5 ? 1 : -1, cheer: r() < 0.3, tpl: r() < 0.5 ? 0 : 1,
+          pen: r() < 0.1,
+          us: r() < 0.5, stripes: s < u * 0.55 ? 1 : s < u * 0.9 ? 2 : 3,
+          freq: 0.8 + r() * 0.9, phase: r() * TAU, amp: 0.28 + r() * 0.2,
+          hop: 2 + r() * 3, ph: r() * TAU, hopAmp: r() < 0.4 ? 2 + r() * 4 : 0,
+          simple: s < u * 0.55, legs: i < rows - 2, motion: cheering
+        });
+      }
+    }
+    // the pens sweep through the crowd row by row, back to front
+    const start = 5, spread = 11;
+    people.forEach((o) => {
+      o.delay = start + (o.row + r() * 1.5) / (rows + 1.5) * spread;
+      o.drawTime = 0.9 + r() * 0.5;
+      const it = add('waver', o);
+      it.draw = drawCrowdMember;
+      crowd.push(it);
+    });
+  }
+
+  // A ripple of jumps out from (x, y), reaching `radius` px.
+  function cheerFrom(x, y, radius = Infinity) {
+    for (const it of crowd) {
+      const dist = Math.hypot(it.x - x, (it.y - y) * 1.6);
+      if (dist < radius) it.cheerAt = world.time + dist / 700;
+    }
+  }
+  const pan = (x) => Math.max(-1, Math.min(1, x / p.width * 2 - 1));
+
+  // The scene is always laid out at this size; the canvas is scaled
+  // to the window's width, with its resolution raised to match so it
+  // stays sharp.
+  const SCENE_W = 1600, SCENE_H = 900;
+  const fitDensity = () => Math.min(3, Math.max(0.5,
+    window.innerWidth / SCENE_W * (window.devicePixelRatio || 1)));
+
+  p.setup = () => {
+    p.pixelDensity(fitDensity());
+    p.createCanvas(SCENE_W, SCENE_H);
+    world = Emberley.createWorld(p, { palette: 'makeaworld', seed: 4, wrap: true });
+    window.dcWorld = world;   // handy for poking at from the console
+    // random crowd noise makes a little group hop where it comes from
+    Sound.onEvent = (size) => {
+      const L = layout(), x = Math.random() * p.width;
+      const y = L.crowdTop + Math.random() * (p.height - L.crowdTop);
+      cheerFrom(x, y, (size > 0.3 ? 220 : 80) * u);
+      return pan(x);
+    };
+    build();
+  };
+
+  // The library caps each frame's time step at 0.05 s; while the crowd
+  // is being drawn frames can be slower than that, so allow up to 0.1 s
+  // to keep the drawing on schedule.
+  p.draw = () => {
+    world.update(Math.min(0.1, (p.deltaTime || 16) / 1000));
+    world.draw();
+  };
+
+  const skyThings = ['bird', 'bird', 'balloon', 'airplane', 'cloud', 'butterfly'];
+  p.mousePressed = (e) => {
+    if (e && e.target && e.target.tagName !== 'CANVAS') return;
+    const L = layout(), x = p.mouseX, y = p.mouseY;
+    if (y > L.crowdTop - 60 * u) { cheerFrom(x, y); Sound.cheer(pan(x)); return; }
+    if (y > L.horizon) return;
+    const name = skyThings[Math.floor(Math.random() * skyThings.length)];
+    const scale = u * (name === 'balloon' ? 0.3 : name === 'cloud' ? 1.3 : name === 'airplane' ? 0.4 : 0.7);
+    world.add(name, {
+      x, y, scale, natural: false, layer: 0.5,
+      color: ['red', 'yellow', 'green', 'blue'][Math.floor(Math.random() * 4)],
+      facing: Math.random() < 0.5 ? 1 : -1
+    });
+  };
+
+  // Resizing only changes the resolution, so the drawing carries on;
+  // the cached crowd bitmaps are remade at the new resolution.
+  p.windowResized = () => {
+    const pd = fitDensity();
+    if (Math.abs(pd - p.pixelDensity()) < 0.01) return;
+    p.pixelDensity(pd);
+    flushSprites();
+  };
+});
+</script>
+</body>
+</html>

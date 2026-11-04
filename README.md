@@ -26,6 +26,7 @@ with him or his publishers.
 | `gallery.html` | The book's step-by-step strips, item by item       |
 | `sheet.html`   | Every item at once, animating in place             |
 | `sizes.html`   | Every item at its natural size, smallest to largest |
+| `dc.html`      | Washington, DC: a sunny day and a flag-waving crowd |
 | `about.md`     | Your own story, shown by the main page's About button |
 | `about.js`     | Loads `about.md` into that panel (tiny Markdown converter) |
 
